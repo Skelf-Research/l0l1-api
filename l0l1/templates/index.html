@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>l0l1 Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .form-group { margin-bottom: 15px; }
+        input, textarea { width: 100%; padding: 8px; }
+        button { padding: 10px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <h1>l0l1 Dashboard</h1>
+        <div v-if="!token">
+            <h2>Login</h2>
+            <div class="form-group">
+                <input v-model="username" placeholder="Username">
+            </div>
+            <div class="form-group">
+                <input v-model="password" type="password" placeholder="Password">
+            </div>
+            <button @click="login">Login</button>
+        </div>
+        <div v-else>
+            <h2>Workspaces</h2>
+            <ul>
+                <li v-for="workspace in workspaces" :key="workspace.id">
+                    {{ workspace.name }}
+                    <button @click="selectWorkspace(workspace)">Select</button>
+                </li>
+            </ul>
+            <div v-if="selectedWorkspace">
+                <h3>{{ selectedWorkspace.name }}</h3>
+                <h4>Add Schema</h4>
+                <div class="form-group">
+                    <textarea v-model="newSchema" placeholder="Enter SQL schema"></textarea>
+                </div>
+                <button @click="addSchema">Add Schema</button>
+                <h4>Add Query</h4>
+                <div class="form-group">
+                    <textarea v-model="newQuery" placeholder="Enter SQL query"></textarea>
+                </div>
+                <button @click="addQuery">Add Query</button>
+                <h4>Insights</h4>
+                <ul>
+                    <li v-for="insight in insights" :key="insight.id">
+                        {{ insight.content }}
+                    </li>
+                </ul>
+                <h4>Add Insight</h4>
+                <div class="form-group">
+                    <textarea v-model="newInsight" placeholder="Enter your insight"></textarea>
+                </div>
+                <button @click="addInsight">Add Insight</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        new Vue({
+            el: '#app',
+            data: {
+                token: localStorage.getItem('token'),
+                username: '',
+                password: '',
+                workspaces: [],
+                selectedWorkspace: null,
+                newSchema: '',
+                newQuery: '',
+                insights: [],
+                newInsight: ''
+            },
+            mounted() {
+                if (this.token) {
+                    this.fetchWorkspaces();
+                }
+            },
+            methods: {
+                login() {
+                    axios.post('/login', {
+                        username: this.username,
+                        password: this.password
+                    }).then(response => {
+                        this.token = response.data.access_token;
+                        localStorage.setItem('token', this.token);
+                        this.fetchWorkspaces();
+                    }).catch(error => {
+                        console.error('Login failed:', error);
+                        alert('Login failed. Please try again.');
+                    });
+                },
+                fetchWorkspaces() {
+                    axios.get('/workspace', {
+                        headers: { Authorization: `Bearer ${this.token}` }
+                    }).then(response => {
+                        this.workspaces = response.data;
+                    }).catch(error => {
+                        console.error('Failed to fetch workspaces:', error);
+                    });
+                },
+                selectWorkspace(workspace) {
+                    this.selectedWorkspace = workspace;
+                    this.fetchInsights();
+                },
+                fetchInsights() {
+                    axios.get(`/workspace/${this.selectedWorkspace.id}/insight`, {
+                        headers: { Authorization: `Bearer ${this.token}` }
+                    }).then(response => {
+                        this.insights = response.data;
+                    }).catch(error => {
+                        console.error('Failed to fetch insights:', error);
+                    });
+                },
+                addSchema() {
+                    axios.post(`/workspace/${this.selectedWorkspace.id}/schema`, {
+                        content: this.newSchema
+                    }, {
+                        headers: { Authorization: `Bearer ${this.token}` }
+                    }).then(() => {
+                        this.newSchema = '';
+                        alert('Schema added successfully');
+                    }).catch(error => {
+                        console.error('Failed to add schema:', error);
+                        alert('Failed to add schema. Please try again.');
+                    });
+                },
+                addQuery() {
+                    axios.post(`/workspace/${this.selectedWorkspace.id}/query`, {
+                        content: this.newQuery
+                    }, {
+                        headers: { Authorization: `Bearer ${this.token}` }
+                    }).then(() => {
+                        this.newQuery = '';
+                        alert('Query added successfully');
+                    }).catch(error => {
+                        console.error('Failed to add query:', error);
+                        alert('Failed to add query. Please try again.');
+                    });
+                },
+                addInsight() {
+                    axios.post(`/workspace/${this.selectedWorkspace.id}/insight`, {
+                        content: this.newInsight
+                    }, {
+                        headers: { Authorization: `Bearer ${this.token}` }
+                    }).then(() => {
+                        this.newInsight = '';
+                        this.fetchInsights();
+                    }).catch(error => {
+                        console.error('Failed to add insight:', error);
+                        alert('Failed to add insight. Please try again.');
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>

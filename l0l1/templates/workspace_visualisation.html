@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workspace Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .container { display: flex; }
+        .graph { width: 60%; height: 600px; }
+        .details { width: 40%; }
+        .node { stroke: #fff; stroke-width: 1.5px; }
+        .link { stroke: #999; stroke-opacity: 0.6; }
+    </style>
+</head>
+<body>
+    <h1>Workspace: {{ workspace.name }}</h1>
+    <div class="container">
+        <div class="graph" id="knowledge-graph"></div>
+        <div class="details">
+            <h2>Schemas</h2>
+            <ul>
+            {% for schema in schemas %}
+                <li>{{ schema.content }} - {{ schema.explanation }}</li>
+            {% endfor %}
+            </ul>
+            <h2>Queries</h2>
+            <ul>
+            {% for query in queries %}
+                <li>{{ query.content }} - {{ query.explanation }}</li>
+            {% endfor %}
+            </ul>
+        </div>
+    </div>
+    <script>
+        const graphData = {{ graph_data|tojson }};
+        
+        // Process data for D3
+        const nodes = [...new Set(graphData.flatMap(d => [d[0], d[2]]))].map(name => ({id: name}));
+        const links = graphData.map(d => ({source: d[0], target: d[2], type: d[1]}));
+
+        const width = 600;
+        const height = 600;
+
+        const svg = d3.select("#knowledge-graph")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        const simulation = d3.forceSimulation(nodes)
+            .force("link", d3.forceLink(links).id(d => d.id))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2));
+
+        const link = svg.append("g")
+            .selectAll("line")
+            .data(links)
+            .join("line")
+            .attr("class", "link");
+
+        const node = svg.append("g")
+            .selectAll("circle")
+            .data(nodes)
+            .join("circle")
+            .attr("class", "node")
+            .attr("r", 5)
+            .call(drag(simulation));
+
+        const label = svg.append("g")
+            .selectAll("text")
+            .data(nodes)
+            .join("text")
+            .text(d => d.id)
+            .attr("font-size", 10)
+            .attr("dx", 12)
+            .attr("dy", 4);
+
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+
+            label
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+        });
+
+        function drag(simulation) {
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+
+            return d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended);
+        }
+    </script>
+</body>
+</html>
