@@ -15,3 +15,4 @@ class Config:
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     DRAMATIQ_BROKER_URL = 'redis://localhost:6379/0'
     COGDB_ROOT_DIR = os.getenv('COGDB_ROOT_DIR', 'cogdb_data')
+    WORKSPACE_DATA_DIR = os.getenv('WORKSPACE_DATA_DIR', 'workspace_data')

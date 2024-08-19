@@ -1,4 +1,4 @@
-from cogdb import CogDB, CogDBClient
+from cog.torque import Graph
 import os
 
 class KnowledgeGraph:

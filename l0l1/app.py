@@ -1,14 +1,14 @@
 # app/__init__.py
 from flask import Flask
 from flask_smorest import Api
-from .models import db
-from .api import blp
+from extensions import db
+from views.api import blp
 import openai
 import dramatiq
 from dramatiq.brokers.redis import RedisBroker
 import os
 
-def create_app(config_object="app.config.Config"):
+def create_app(config_object="config.Config"):
     app = Flask(__name__)
     app.config.from_object(config_object)
 
@@ -25,9 +25,5 @@ def create_app(config_object="app.config.Config"):
     # Ensure CogDB root directory exists
     os.makedirs(app.config['COGDB_ROOT_DIR'], exist_ok=True)
     os.makedirs(app.config['WORKSPACE_DATA_DIR'], exist_ok=True)
-
-    @app.before_first_request
-    def create_tables():
-        db.create_all()
 
     return app

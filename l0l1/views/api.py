@@ -1,8 +1,10 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from ..models import db, Customer, Workspace, Schema, Query
-from ..schemas import CustomerSchema, WorkspaceSchema, SchemaSchema, QuerySchema
+from models import db, Customer, Workspace, Schema, Query
+from schemas import CustomerSchema, WorkspaceSchema, SchemaSchema, QuerySchema, InsightSchema, CommentSchema
 from flask_jwt_extended import jwt_required
+from actors import process_schema, process_query
+from marshmallow import Schema, fields
 
 blp = Blueprint("l0l1", __name__, description="l0l1 API")
 
@@ -70,8 +72,6 @@ class WorkspaceDetailResource(MethodView):
             abort(404, message=str(e))
 
 # Add similar endpoints for Schema and Query resources
-
-from ..actors import process_schema, process_query
 
 @blp.route("/schema")
 class SchemaResource(MethodView):

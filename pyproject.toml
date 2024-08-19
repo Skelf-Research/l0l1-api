@@ -7,6 +7,15 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
+flask = "^3.0.3"
+flask-jwt-extended = "^4.6.0"
+usearch = "^2.13.5"
+cogdb = "^3.0.7"
+flask-smorest = "^0.44.0"
+flask-sqlalchemy = "^3.1.1"
+dramatiq = {extras = ["redis"], version = "^1.17.0"}
+sqlparse = "^0.5.1"
+openai = "^1.41.0"
 
 
 [build-system]

@@ -1,10 +1,8 @@
-# app/models.py
-from flask_sqlalchemy import SQLAlchemy
-from .vector_db import VectorDB
-from .knowledge_graph import KnowledgeGraph
-
-db = SQLAlchemy()
-
+from modules.vector_db import VectorDB
+from modules.knowledge_graph import KnowledgeGraph
+from extensions import db
+import os
+from datetime import datetime
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -64,7 +62,7 @@ class Schema(db.Model):
     workspace = db.relationship('Workspace', backref=db.backref('schemas', lazy=True))
 
     def generate_explanation_and_embedding(self):
-        from .openai_service import OpenAIService
+        from .modules.openai_service import OpenAIService
         self.explanation = OpenAIService.explain_schema(self.content)
         self.embedding = OpenAIService.generate_embedding(self.content)
         db.session.commit()
@@ -78,7 +76,7 @@ class Query(db.Model):
     workspace = db.relationship('Workspace', backref=db.backref('queries', lazy=True))
 
     def generate_explanation_and_embedding(self):
-        from .openai_service import OpenAIService
+        from .modules.openai_service import OpenAIService
         self.explanation = OpenAIService.explain_query(self.content)
         self.embedding = OpenAIService.generate_embedding(self.content)
         db.session.commit()
