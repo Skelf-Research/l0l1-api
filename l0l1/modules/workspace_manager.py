@@ -1,4 +1,5 @@
-from .models import db, Workspace, Schema, Query
+from extensions import db
+from models import Workspace, Schema, Query
 
 class WorkspaceManager:
     @staticmethod

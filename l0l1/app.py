@@ -2,11 +2,15 @@
 from flask import Flask
 from flask_smorest import Api
 from extensions import db
-from views.api import blp
+from views.auth import blp as auth_blp
+from views.workspace import blp as workspace_blp
+from views.schema import blp as schema_blp
+from views.query import blp as query_blp
 import openai
 import dramatiq
 from dramatiq.brokers.redis import RedisBroker
 import os
+
 
 def create_app(config_object="config.Config"):
     app = Flask(__name__)
@@ -15,7 +19,10 @@ def create_app(config_object="config.Config"):
     db.init_app(app)
     api = Api(app)
 
-    api.register_blueprint(blp)
+    api.register_blueprint(auth_blp)
+    api.register_blueprint(workspace_blp)
+    api.register_blueprint(schema_blp)
+    api.register_blueprint(query_blp)
 
     openai.api_key = app.config['OPENAI_API_KEY']
 

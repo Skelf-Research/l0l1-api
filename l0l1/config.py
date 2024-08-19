@@ -16,3 +16,7 @@ class Config:
     DRAMATIQ_BROKER_URL = 'redis://localhost:6379/0'
     COGDB_ROOT_DIR = os.getenv('COGDB_ROOT_DIR', 'cogdb_data')
     WORKSPACE_DATA_DIR = os.getenv('WORKSPACE_DATA_DIR', 'workspace_data')
+    JWT_TOKEN_LOCATION = ['headers']
+    JWT_HEADER_NAME = 'Authorization'
+    JWT_HEADER_TYPE = 'Bearer'
+    JWT_IDENTITY_CLAIM = 'sub'
