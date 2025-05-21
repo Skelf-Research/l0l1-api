@@ -1,12 +1,16 @@
 # l0l1 - SQL Analysis and Collaboration Platform
 
+> **⚠️ Project Status: Work in Progress**
+>
+> This project is currently under active development. Features, setup instructions, and documentation may change frequently. Use at your own risk and feel free to contribute!
+
 l0l1 is a platform for data analysts to analyze SQL schemas and queries, collaborate on insights, and leverage AI-powered features for query completion and explanation.
 
-## Setup
+## Setup (Early Preview)
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/l0l1.git
+   git clone https://github.com/shakydata/l0l1.git
    cd l0l1
    ```
 
@@ -34,7 +38,7 @@ l0l1 is a platform for data analysts to analyze SQL schemas and queries, collabo
    flask create-admin admin admin@example.com
    ```
 
-## Running the Application
+## Running the Application (Alpha)
 
 1. Start the Redis server (for background tasks):
    ```
@@ -62,7 +66,7 @@ pytest
 
 ## Contributing
 
-Please read CONTRIBUTING.md for details on our code of conduct and the process for submitting pull requests.
+Please read CONTRIBUTING.md for details on our code of conduct and the process for submitting pull requests. All contributions are welcome, especially as the project is in its early stages.
 
 ## License
 
