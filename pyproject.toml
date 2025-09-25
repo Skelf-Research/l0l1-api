@@ -1,22 +1,226 @@
 [tool.poetry]
 name = "l0l1"
-version = "0.1.0"
-description = ""
+version = "0.2.0"
+description = "AI-Powered SQL Analysis and Validation Library with Graph-Based Learning"
 authors = ["Dipankar Sarkar <me@dipankar.name>"]
+maintainers = ["Dipankar Sarkar <me@dipankar.name>"]
 readme = "README.md"
+homepage = "https://github.com/dipankar/l0l1-api"
+repository = "https://github.com/dipankar/l0l1-api"
+documentation = "https://l0l1.readthedocs.io"
+keywords = ["sql", "analysis", "validation", "ai", "machine-learning", "pii-detection", "graph-learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+packages = [{include = "l0l1"}]
+include = [
+    "l0l1/**/*.py",
+    "l0l1/**/*.sql",
+    "examples/**/*",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+]
+exclude = [
+    "tests/**/*",
+    "docs/**/*",
+    "**/__pycache__",
+    "**/*.pyc"
+]
+
+[tool.poetry.scripts]
+l0l1 = "l0l1.cli.main:app"
+l0l1-serve = "l0l1.api.main:start_server"
+l0l1-demo = "l0l1.demo.demo_init:main"
+
+[tool.poetry.plugins."jupyter_serverproxy"]
+l0l1 = "l0l1.jupyter.proxy:setup_l0l1"
+
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/dipankar/l0l1-api/issues"
+"Changelog" = "https://github.com/dipankar/l0l1-api/blob/main/CHANGELOG.md"
+"Discussions" = "https://github.com/dipankar/l0l1-api/discussions"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-flask = "^3.0.3"
-flask-jwt-extended = "^4.6.0"
-usearch = "^2.13.5"
-cogdb = "^3.0.7"
-flask-smorest = "^0.44.0"
-flask-sqlalchemy = "^3.1.1"
-dramatiq = {extras = ["redis"], version = "^1.17.0"}
-sqlparse = "^0.5.1"
-openai = "^1.41.0"
+# Core FastAPI dependencies
+fastapi = "^0.104.0"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
 
+# Database and storage
+sqlalchemy = "^2.0.0"
+alembic = "^1.12.0"
+duckdb = "^0.10.0"
+# Database drivers (optional)
+# psycopg2-binary = "^2.9.0"
+# mysqlclient = "^2.2.0"
+
+# Vector search and graph database
+usearch = "^2.13.5"
+# cogdb = "^3.0.7"  # Optional - comment out if not available
+
+# Background tasks
+dramatiq = {extras = ["redis"], version = "^1.17.0"}
+redis = "^5.0.0"
+
+# SQL parsing and analysis
+sqlparse = "^0.5.1"
+regex = "^2023.12.0"
+
+# AI/ML dependencies
+openai = "^1.41.0"
+anthropic = "^0.34.0"
+langchain = "^0.2.0"
+langchain-openai = "^0.1.0"
+langchain-anthropic = "^0.1.0"
+# spacy = "^3.7.0"  # Optional - large download
+
+# PII detection and privacy
+presidio-analyzer = "^2.2.0"
+presidio-anonymizer = "^2.2.0"
+cryptography = "^41.0.0"
+
+# CLI and utilities
+typer = "^0.9.0"
+rich = "^13.7.0"
+click = "^8.1.0"
+
+# Jupyter integration
+jupyter = "^1.0.0"
+ipywidgets = "^8.1.0"
+
+# Web and networking
+httpx = "^0.27.0"
+websockets = "^12.0.0"
+
+# Data processing
+pandas = "^2.1.0"
+numpy = "^1.24.0"
+
+# Utilities
+python-multipart = "^0.0.6"
+python-dotenv = "^1.0.0"
+tenacity = "^8.2.0"
+
+[tool.poetry.group.dev.dependencies]
+# Testing
+pytest = "^7.4.0"
+pytest-asyncio = "^0.21.0"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.12.0"
+httpx = "^0.27.0"  # For testing FastAPI
+
+# Code formatting and linting
+black = "^23.12.0"
+isort = "^5.13.0"
+flake8 = "^6.1.0"
+mypy = "^1.8.0"
+ruff = "^0.1.0"
+
+# Development tools
+pre-commit = "^3.6.0"
+watchdog = "^3.0.0"
+
+# Type stubs
+types-redis = "^4.6.0"
+types-requests = "^2.31.0"
+
+[tool.poetry.group.jupyter.dependencies]
+jupyterlab = "^4.0.0"
+ipython = "^8.18.0"
+jupyter-console = "^6.6.0"
+notebook = "^7.0.0"
+
+[tool.poetry.group.demo.dependencies]
+# Demo-specific dependencies
+faker = "^20.1.0"
+
+[tool.poetry.group.docs.dependencies]
+# Documentation
+mkdocs = "^1.5.0"
+mkdocs-material = "^9.4.0"
+mkdocstrings = {extras = ["python"], version = "^0.24.0"}
+
+[tool.poetry.group.ide.dependencies]
+# IDE integration dependencies
+python-lsp-server = "^1.10.0"
+python-lsp-black = "^2.0.0"
+
+# Optional dependency groups for different database backends
+[tool.poetry.group.postgres.dependencies]
+psycopg2-binary = "^2.9.0"
+asyncpg = "^0.29.0"
+
+[tool.poetry.group.mysql.dependencies]
+mysqlclient = "^2.2.0"
+aiomysql = "^0.2.0"
+
+[tool.poetry.group.sqlite.dependencies]
+aiosqlite = "^0.19.0"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+strict_optional = true
+show_error_codes = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=l0l1 --cov-report=term-missing --cov-report=html"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "demo: marks tests that require demo data"
+]
+
+[tool.coverage.run]
+source = ["l0l1"]
+omit = [
+    "*/tests/*",
+    "*/demo/*",
+    "*/__init__.py"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__."
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+select = ["E", "W", "F", "I", "B", "C4", "ARG", "SIM"]
+ignore = ["E501", "W503", "E203"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*.py" = ["ARG001", "ARG002"]
 
 [build-system]
 requires = ["poetry-core"]
