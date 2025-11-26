@@ -1,5 +1,5 @@
 # l0l1 Makefile - Poetry-based development workflow
-.PHONY: help install dev test lint format clean demo serve docs
+.PHONY: help install dev test lint format clean demo serve docs frontend-install frontend-dev frontend-build frontend-preview dev-all setup-all
 
 # Default target
 help: ## Show this help message
@@ -184,3 +184,31 @@ setup: ## Complete setup for new developers
 	@echo "  make jupyter      # Start Jupyter Lab"
 	@echo "  make test         # Run tests"
 	@echo "  make help         # Show all commands"
+
+# Frontend development
+frontend-install: ## Install frontend dependencies
+	cd frontend && npm install
+
+frontend-dev: ## Start frontend development server
+	cd frontend && npm run dev
+
+frontend-build: ## Build frontend for production
+	cd frontend && npm run build
+
+frontend-preview: ## Preview frontend production build
+	cd frontend && npm run preview
+
+# Full stack development
+dev-all: ## Start both API and frontend servers
+	@echo "Starting l0l1 full stack development..."
+	@echo "API server: http://localhost:8000"
+	@echo "Frontend: http://localhost:3000"
+	@make serve & make frontend-dev
+
+# Complete setup including frontend
+setup-all: setup frontend-install ## Complete setup including frontend
+	@echo ""
+	@echo "✅ Full stack setup complete! Try these commands:"
+	@echo "  make dev-all      # Start API + Frontend"
+	@echo "  make serve        # Start API server only"
+	@echo "  make frontend-dev # Start frontend only"

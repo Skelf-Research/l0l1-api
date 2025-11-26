@@ -1,21 +1,22 @@
-import asyncio
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
-import hashlib
+"""Continuous learning service for SQL query improvement with persistent storage."""
+
 import json
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 from ..models.factory import ModelFactory
 from ..core.config import settings
 from .pii_detector import PIIDetector
+from .pattern_store import PatternStore
 
 
 class LearningService:
     """Continuous learning service for SQL query improvement."""
 
-    def __init__(self):
+    def __init__(self, db_path: str = None):
         self.model = ModelFactory.get_default_model()
         self.pii_detector = PIIDetector()
-        self.learning_data = {}  # In-memory storage for demo, replace with persistent storage
+        self.store = PatternStore(db_path or "./data/learning_patterns.db")
 
     async def record_successful_query(
         self,
@@ -32,39 +33,26 @@ class LearningService:
         # Check if query is safe for learning (no PII)
         if not self.pii_detector.is_safe_for_learning(query):
             # Sanitize the query
-            sanitized_query = self.pii_detector.sanitize_for_learning(query)
-            query = sanitized_query
+            query = self.pii_detector.sanitize_for_learning(query)
 
         # Generate embedding for similarity matching
+        embedding = None
         try:
             embedding_response = await self.model.generate_embedding(query)
             embedding = embedding_response.embedding
-        except Exception:
-            return False
+        except Exception as e:
+            print(f"Warning: Could not generate embedding: {e}")
+            # Continue without embedding - pattern will still be saved
 
-        # Create learning record
-        query_hash = hashlib.sha256(query.encode()).hexdigest()
-        learning_record = {
-            "query_hash": query_hash,
-            "query": query,
-            "workspace_id": workspace_id,
-            "embedding": embedding,
-            "execution_time": execution_time,
-            "result_count": result_count,
-            "schema_context": schema_context,
-            "success_count": 1,
-            "last_used": datetime.utcnow().isoformat(),
-            "created_at": datetime.utcnow().isoformat()
-        }
-
-        # Store or update learning record
-        if query_hash in self.learning_data:
-            existing = self.learning_data[query_hash]
-            existing["success_count"] += 1
-            existing["last_used"] = datetime.utcnow().isoformat()
-            existing["execution_time"] = (existing["execution_time"] + execution_time) / 2
-        else:
-            self.learning_data[query_hash] = learning_record
+        # Save to persistent store
+        self.store.save_pattern(
+            query=query,
+            workspace_id=workspace_id,
+            embedding=embedding,
+            execution_time=execution_time,
+            result_count=result_count,
+            schema_context=schema_context
+        )
 
         return True
 
@@ -76,7 +64,7 @@ class LearningService:
         similarity_threshold: float = None
     ) -> List[Dict[str, Any]]:
         """Get similar successful queries for learning."""
-        if not settings.enable_learning or not self.learning_data:
+        if not settings.enable_learning:
             return []
 
         similarity_threshold = similarity_threshold or settings.learning_threshold
@@ -86,26 +74,29 @@ class LearningService:
             embedding_response = await self.model.generate_embedding(query)
             query_embedding = embedding_response.embedding
 
-            # Calculate similarities with learned queries
+            # Get all patterns with embeddings from store
+            patterns = self.store.get_patterns_with_embeddings(workspace_id)
+
+            if not patterns:
+                return []
+
+            # Calculate similarities
             similarities = []
-            for record in self.learning_data.values():
-                # Filter by workspace if specified
-                if workspace_id and record["workspace_id"] != workspace_id:
+            for pattern in patterns:
+                if not pattern.get("embedding"):
                     continue
 
-                # Calculate cosine similarity
-                similarity = self._cosine_similarity(query_embedding, record["embedding"])
+                similarity = self._cosine_similarity(query_embedding, pattern["embedding"])
                 if similarity >= similarity_threshold:
-                    similarities.append({
-                        **record,
-                        "similarity": similarity
-                    })
+                    pattern["similarity"] = similarity
+                    similarities.append(pattern)
 
             # Sort by similarity and return top results
             similarities.sort(key=lambda x: x["similarity"], reverse=True)
             return similarities[:limit]
 
-        except Exception:
+        except Exception as e:
+            print(f"Warning: Could not search similar queries: {e}")
             return []
 
     async def get_query_suggestions(
@@ -115,6 +106,8 @@ class LearningService:
         schema_context: Optional[str] = None
     ) -> List[str]:
         """Get query completion suggestions based on learned patterns."""
+        suggestions = []
+
         # Get similar successful queries
         similar_queries = await self.get_similar_successful_queries(
             partial_query,
@@ -123,8 +116,6 @@ class LearningService:
             similarity_threshold=0.6
         )
 
-        suggestions = []
-
         # Use AI model to complete the query
         try:
             ai_completion = await self.model.complete_sql_query(
@@ -132,8 +123,8 @@ class LearningService:
                 schema_context
             )
             suggestions.append(ai_completion)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Warning: AI completion failed: {e}")
 
         # Add suggestions from learned queries
         for similar in similar_queries:
@@ -177,16 +168,17 @@ class LearningService:
             )
             result["improved_query"] = corrected_query
             result["confidence"] = 0.8 if similar_queries else 0.6
-        except Exception:
+        except Exception as e:
+            print(f"Warning: AI correction failed: {e}")
             if similar_queries:
                 result["improved_query"] = similar_queries[0]["query"]
-                result["confidence"] = similar_queries[0]["similarity"]
+                result["confidence"] = similar_queries[0].get("similarity", 0.5)
 
         return result
 
     def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """Calculate cosine similarity between two vectors."""
-        if len(vec1) != len(vec2):
+        if not vec1 or not vec2 or len(vec1) != len(vec2):
             return 0.0
 
         dot_product = sum(a * b for a, b in zip(vec1, vec2))
@@ -200,41 +192,82 @@ class LearningService:
 
     def get_learning_stats(self, workspace_id: Optional[str] = None) -> Dict[str, Any]:
         """Get learning statistics."""
-        if workspace_id:
-            workspace_data = [
-                record for record in self.learning_data.values()
-                if record["workspace_id"] == workspace_id
-            ]
+        return self.store.get_stats(workspace_id)
+
+    def list_patterns(
+        self,
+        workspace_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "last_used",
+        sort_order: str = "desc"
+    ) -> Dict[str, Any]:
+        """List learned patterns with pagination."""
+        return self.store.list_patterns(workspace_id, limit, offset, sort_by, sort_order)
+
+    def get_pattern(self, pattern_id: str) -> Optional[Dict[str, Any]]:
+        """Get a specific pattern by ID."""
+        pattern = self.store.get_pattern(pattern_id)
+        if pattern:
+            pattern.pop("embedding", None)  # Don't return embedding in API
+        return pattern
+
+    def update_pattern(self, pattern_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Update a pattern's metadata."""
+        pattern = self.store.update_pattern(pattern_id, updates)
+        if pattern:
+            pattern.pop("embedding", None)
+        return pattern
+
+    def delete_pattern(self, pattern_id: str) -> bool:
+        """Delete a learned pattern."""
+        return self.store.delete_pattern(pattern_id)
+
+    def bulk_delete_patterns(
+        self,
+        pattern_ids: List[str] = None,
+        workspace_id: str = None,
+        older_than_days: int = None
+    ) -> int:
+        """Bulk delete patterns based on criteria."""
+        return self.store.bulk_delete(pattern_ids, workspace_id, older_than_days)
+
+    def adjust_confidence(self, pattern_id: str, adjustment: float) -> Optional[Dict[str, Any]]:
+        """Adjust a pattern's success count (affects confidence)."""
+        pattern = self.store.adjust_confidence(pattern_id, adjustment)
+        if pattern:
+            pattern.pop("embedding", None)
+        return pattern
+
+    def export_patterns(self, workspace_id: Optional[str] = None, format: str = "json") -> str:
+        """Export patterns for backup or transfer."""
+        patterns = self.store.export_patterns(workspace_id)
+
+        if format == "json":
+            return json.dumps({
+                "patterns": patterns,
+                "exported_at": datetime.utcnow().isoformat()
+            }, indent=2)
         else:
-            workspace_data = list(self.learning_data.values())
+            raise ValueError(f"Unsupported format: {format}")
 
-        if not workspace_data:
-            return {
-                "total_queries": 0,
-                "avg_execution_time": 0.0,
-                "most_successful": None,
-                "recent_activity": []
-            }
+    async def import_patterns(
+        self,
+        data: Dict[str, Any],
+        workspace_id: str,
+        overwrite: bool = False
+    ) -> Dict[str, Any]:
+        """Import patterns from backup."""
+        patterns = data.get("patterns", [])
+        result = self.store.import_patterns(patterns, workspace_id, overwrite)
 
-        total_queries = len(workspace_data)
-        avg_execution_time = sum(q["execution_time"] for q in workspace_data) / total_queries
+        # Optionally regenerate embeddings for imported patterns
+        # This is expensive so we skip it by default
+        # for pattern in patterns:
+        #     try:
+        #         embedding_response = await self.model.generate_embedding(pattern["query"])
+        #         self.store.update_pattern(pattern["query_hash"], {"embedding": embedding_response.embedding})
+        #     except:
+        #         pass
 
-        # Most successful query
-        most_successful = max(workspace_data, key=lambda x: x["success_count"])
-
-        # Recent activity (last 7 days)
-        week_ago = datetime.utcnow() - timedelta(days=7)
-        recent_activity = [
-            q for q in workspace_data
-            if datetime.fromisoformat(q["last_used"]) > week_ago
-        ]
-
-        return {
-            "total_queries": total_queries,
-            "avg_execution_time": avg_execution_time,
-            "most_successful": {
-                "query": most_successful["query"][:100] + "..." if len(most_successful["query"]) > 100 else most_successful["query"],
-                "success_count": most_successful["success_count"]
-            },
-            "recent_activity": len(recent_activity)
-        }
+        return result
