@@ -1,4 +1,4 @@
-# l0l1 Makefile - Poetry-based development workflow
+# l0l1 Makefile - uv-based development workflow
 .PHONY: help install dev test lint format clean demo serve docs frontend-install frontend-dev frontend-build frontend-preview dev-all setup-all
 
 # Default target
@@ -11,106 +11,103 @@ help: ## Show this help message
 
 # Installation
 install: ## Install dependencies
-	poetry install
+	uv sync
 
 install-all: ## Install all dependencies including optional groups
-	poetry install --with dev,jupyter,demo,docs,ide
+	uv sync --all-extras
 
 install-prod: ## Install only production dependencies
-	poetry install --only main
+	uv sync --no-dev
 
 # Development
 dev: ## Setup development environment
-	poetry install --with dev,jupyter,demo
-	poetry run pre-commit install
-
-shell: ## Activate Poetry shell
-	poetry shell
+	uv sync --extra dev --extra jupyter --extra demo
+	uv run pre-commit install
 
 # Testing
 test: ## Run tests
-	poetry run pytest
+	uv run pytest
 
 test-cov: ## Run tests with coverage
-	poetry run pytest --cov=l0l1 --cov-report=term-missing --cov-report=html
+	uv run pytest --cov=l0l1 --cov-report=term-missing --cov-report=html
 
 test-fast: ## Run only fast tests
-	poetry run pytest -m "not slow"
+	uv run pytest -m "not slow"
 
 test-integration: ## Run integration tests
-	poetry run pytest -m integration
+	uv run pytest -m integration
 
 # Code Quality
 lint: ## Run linting
-	poetry run flake8 l0l1/
-	poetry run ruff l0l1/
-	poetry run mypy l0l1/
+	uv run flake8 l0l1/
+	uv run ruff check l0l1/
+	uv run mypy l0l1/
 
 format: ## Format code
-	poetry run black l0l1/ tests/ examples/
-	poetry run isort l0l1/ tests/ examples/
+	uv run black l0l1/ tests/ examples/
+	uv run isort l0l1/ tests/ examples/
 
 format-check: ## Check code formatting
-	poetry run black --check l0l1/ tests/ examples/
-	poetry run isort --check-only l0l1/ tests/ examples/
+	uv run black --check l0l1/ tests/ examples/
+	uv run isort --check-only l0l1/ tests/ examples/
 
 # Demo and Development
 demo-ecommerce: ## Create e-commerce demo environment
-	poetry run python -m l0l1.demo.demo_init ecommerce
+	uv run python -m l0l1.demo.demo_init ecommerce
 
 demo-saas: ## Create SaaS demo environment
-	poetry run python -m l0l1.demo.demo_init saas
+	uv run python -m l0l1.demo.demo_init saas
 
 demo-clean: ## Clean demo environments
 	rm -rf ~/.l0l1/workspaces/demo_*
 
 # Services
 serve: ## Start API server
-	poetry run uvicorn l0l1.api.main:app --reload --host 0.0.0.0 --port 8000
+	uv run uvicorn l0l1.api.main:app --reload --host 0.0.0.0 --port 8000
 
 serve-prod: ## Start API server for production
-	poetry run uvicorn l0l1.api.main:app --host 0.0.0.0 --port 8000
+	uv run uvicorn l0l1.api.main:app --host 0.0.0.0 --port 8000
 
 workers: ## Start background workers
-	poetry run dramatiq l0l1.tasks
+	uv run dramatiq l0l1.tasks
 
 # Jupyter
 jupyter: ## Start Jupyter Lab
-	poetry run jupyter lab
+	uv run jupyter lab
 
 jupyter-notebook: ## Start Jupyter Notebook
-	poetry run jupyter notebook
+	uv run jupyter notebook
 
 # Documentation
 docs: ## Build documentation
-	poetry run mkdocs build
+	uv run mkdocs build
 
 docs-serve: ## Serve documentation locally
-	poetry run mkdocs serve
+	uv run mkdocs serve
 
 docs-deploy: ## Deploy documentation
-	poetry run mkdocs gh-deploy
+	uv run mkdocs gh-deploy
 
 # Build and Release
 build: ## Build package
-	poetry build
+	uv build
 
 publish: ## Publish to PyPI (requires authentication)
-	poetry publish
+	uv publish
 
 publish-test: ## Publish to Test PyPI
-	poetry publish --repository testpypi
+	uv publish --index testpypi
 
 # Database and Migration
 db-upgrade: ## Run database migrations
-	poetry run alembic upgrade head
+	uv run alembic upgrade head
 
 db-downgrade: ## Rollback database migrations
-	poetry run alembic downgrade -1
+	uv run alembic downgrade -1
 
 db-migration: ## Create new database migration
 	@read -p "Migration name: " name; \
-	poetry run alembic revision --autogenerate -m "$$name"
+	uv run alembic revision --autogenerate -m "$$name"
 
 # Utilities
 clean: ## Clean up cache and temporary files
@@ -122,17 +119,16 @@ clean: ## Clean up cache and temporary files
 	rm -rf build/
 	rm -rf dist/
 	rm -rf htmlcov/
-	poetry cache clear pypi --all
+	uv cache clean
 
 update: ## Update dependencies
-	poetry update
+	uv lock --upgrade
 
 security: ## Run security checks
-	poetry run pip-audit
-	poetry export -f requirements.txt | poetry run safety check --stdin
+	uv run pip-audit
 
 pre-commit: ## Run pre-commit hooks on all files
-	poetry run pre-commit run --all-files
+	uv run pre-commit run --all-files
 
 # Quick development workflow
 check: format-check lint test-fast ## Run quick checks (format, lint, fast tests)
@@ -143,26 +139,23 @@ ci: format-check lint test ## Run CI checks (format, lint, all tests)
 info: ## Show environment information
 	@echo "=== System Information ==="
 	@python --version
-	@poetry --version
-	@echo ""
-	@echo "=== Poetry Configuration ==="
-	@poetry config --list
+	@uv --version
 	@echo ""
 	@echo "=== Virtual Environment ==="
-	@poetry env info
+	@uv venv --help > /dev/null 2>&1 && echo "uv is configured correctly"
 	@echo ""
 	@echo "=== Installed Packages ==="
-	@poetry show --tree
+	@uv pip list
 
 # CLI shortcuts
 validate: ## Validate SQL (usage: make validate SQL="SELECT * FROM table")
-	poetry run l0l1 validate "$(SQL)"
+	uv run l0l1 validate "$(SQL)"
 
 explain: ## Explain SQL (usage: make explain SQL="SELECT * FROM table")
-	poetry run l0l1 explain "$(SQL)"
+	uv run l0l1 explain "$(SQL)"
 
 complete: ## Complete SQL (usage: make complete SQL="SELECT * FROM")
-	poetry run l0l1 complete "$(SQL)"
+	uv run l0l1 complete "$(SQL)"
 
 # Development server with auto-reload
 dev-server: ## Start development server with auto-reload and demo data
@@ -170,16 +163,16 @@ dev-server: ## Start development server with auto-reload and demo data
 	@echo "Creating demo environment..."
 	@make demo-ecommerce > /dev/null 2>&1 || true
 	@echo "Starting API server at http://localhost:8000"
-	@poetry run uvicorn l0l1.api.main:app --reload --host 0.0.0.0 --port 8000
+	@uv run uvicorn l0l1.api.main:app --reload --host 0.0.0.0 --port 8000
 
 # Full setup for new developers
 setup: ## Complete setup for new developers
 	@echo "Setting up l0l1 development environment..."
-	poetry install --with dev,jupyter,demo,docs
-	poetry run pre-commit install
+	uv sync --extra dev --extra jupyter --extra demo --extra docs
+	uv run pre-commit install
 	@make demo-ecommerce
 	@echo ""
-	@echo "✅ Setup complete! Try these commands:"
+	@echo "Setup complete! Try these commands:"
 	@echo "  make serve        # Start API server"
 	@echo "  make jupyter      # Start Jupyter Lab"
 	@echo "  make test         # Run tests"
@@ -208,7 +201,7 @@ dev-all: ## Start both API and frontend servers
 # Complete setup including frontend
 setup-all: setup frontend-install ## Complete setup including frontend
 	@echo ""
-	@echo "✅ Full stack setup complete! Try these commands:"
+	@echo "Full stack setup complete! Try these commands:"
 	@echo "  make dev-all      # Start API + Frontend"
 	@echo "  make serve        # Start API server only"
 	@echo "  make frontend-dev # Start frontend only"

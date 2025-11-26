@@ -1,0 +1,306 @@
+{
+  "name": "l0l1-sql",
+  "displayName": "l0l1 SQL",
+  "description": "AI-powered SQL validation, PII detection, and intelligent completions",
+  "version": "0.2.0",
+  "publisher": "l0l1",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dipankar/l0l1-api"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Machine Learning",
+    "Other"
+  ],
+  "keywords": [
+    "sql",
+    "validation",
+    "ai",
+    "pii",
+    "database",
+    "query",
+    "completion"
+  ],
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onLanguage:sql",
+    "onCommand:l0l1.startServer"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "sql",
+        "aliases": ["SQL", "sql"],
+        "extensions": [".sql"]
+      }
+    ],
+    "configuration": {
+      "title": "l0l1 SQL",
+      "properties": {
+        "l0l1.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable l0l1 SQL validation"
+        },
+        "l0l1.serverMode": {
+          "type": "string",
+          "enum": ["embedded", "tcp", "api"],
+          "default": "api",
+          "description": "Server connection mode: embedded (start Python LSP), tcp (connect to LSP), api (use REST API)"
+        },
+        "l0l1.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "l0l1 API server URL (for api mode)"
+        },
+        "l0l1.tcpHost": {
+          "type": "string",
+          "default": "localhost",
+          "description": "LSP server host (for tcp mode)"
+        },
+        "l0l1.tcpPort": {
+          "type": "number",
+          "default": 9257,
+          "description": "LSP server port (for tcp mode)"
+        },
+        "l0l1.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Path to Python interpreter (for embedded mode)"
+        },
+        "l0l1.workspace": {
+          "type": "string",
+          "default": "vscode",
+          "description": "Default workspace name for queries"
+        },
+        "l0l1.validateOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate SQL files on save"
+        },
+        "l0l1.validateOnType": {
+          "type": "boolean",
+          "default": false,
+          "description": "Validate SQL while typing (may impact performance)"
+        },
+        "l0l1.validateDelay": {
+          "type": "number",
+          "default": 500,
+          "description": "Delay in ms before validating after typing"
+        },
+        "l0l1.enablePiiDetection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable PII detection in SQL queries"
+        },
+        "l0l1.enableCompletions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI-powered SQL completions"
+        },
+        "l0l1.enableHover": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable hover explanations"
+        },
+        "l0l1.schemaFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to schema file for context-aware validation"
+        },
+        "l0l1.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show l0l1 status in the status bar"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "l0l1.validateDocument",
+        "title": "Validate SQL Document",
+        "category": "l0l1",
+        "icon": "$(check)"
+      },
+      {
+        "command": "l0l1.validateSelection",
+        "title": "Validate Selected SQL",
+        "category": "l0l1"
+      },
+      {
+        "command": "l0l1.explainQuery",
+        "title": "Explain SQL Query",
+        "category": "l0l1",
+        "icon": "$(info)"
+      },
+      {
+        "command": "l0l1.checkPii",
+        "title": "Check for PII",
+        "category": "l0l1",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "l0l1.anonymizePii",
+        "title": "Anonymize PII in Query",
+        "category": "l0l1"
+      },
+      {
+        "command": "l0l1.completeQuery",
+        "title": "Get Query Completions",
+        "category": "l0l1"
+      },
+      {
+        "command": "l0l1.setSchema",
+        "title": "Set Schema Context",
+        "category": "l0l1",
+        "icon": "$(database)"
+      },
+      {
+        "command": "l0l1.clearSchema",
+        "title": "Clear Schema Context",
+        "category": "l0l1"
+      },
+      {
+        "command": "l0l1.showOutput",
+        "title": "Show Output Channel",
+        "category": "l0l1"
+      },
+      {
+        "command": "l0l1.startServer",
+        "title": "Start l0l1 Server",
+        "category": "l0l1"
+      },
+      {
+        "command": "l0l1.stopServer",
+        "title": "Stop l0l1 Server",
+        "category": "l0l1"
+      },
+      {
+        "command": "l0l1.restartServer",
+        "title": "Restart l0l1 Server",
+        "category": "l0l1"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "l0l1.validateDocument",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorTextFocus && editorLangId == sql"
+      },
+      {
+        "command": "l0l1.explainQuery",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorTextFocus && editorLangId == sql"
+      },
+      {
+        "command": "l0l1.checkPii",
+        "key": "ctrl+shift+p",
+        "mac": "cmd+shift+p",
+        "when": "editorTextFocus && editorLangId == sql"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "submenu": "l0l1.submenu",
+          "group": "l0l1",
+          "when": "editorLangId == sql"
+        }
+      ],
+      "l0l1.submenu": [
+        {
+          "command": "l0l1.validateSelection",
+          "group": "1_validate"
+        },
+        {
+          "command": "l0l1.explainQuery",
+          "group": "1_validate"
+        },
+        {
+          "command": "l0l1.checkPii",
+          "group": "2_pii"
+        },
+        {
+          "command": "l0l1.anonymizePii",
+          "group": "2_pii"
+        },
+        {
+          "command": "l0l1.setSchema",
+          "group": "3_schema"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "l0l1.validateDocument",
+          "when": "editorLangId == sql",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "l0l1.validateDocument",
+          "when": "editorLangId == sql"
+        },
+        {
+          "command": "l0l1.validateSelection",
+          "when": "editorLangId == sql && editorHasSelection"
+        },
+        {
+          "command": "l0l1.explainQuery",
+          "when": "editorLangId == sql"
+        },
+        {
+          "command": "l0l1.checkPii",
+          "when": "editorLangId == sql"
+        },
+        {
+          "command": "l0l1.anonymizePii",
+          "when": "editorLangId == sql"
+        }
+      ]
+    },
+    "submenus": [
+      {
+        "id": "l0l1.submenu",
+        "label": "l0l1 SQL"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.55.0",
+    "typescript": "^5.3.2"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "vscode-languageclient": "^9.0.1"
+  }
+}

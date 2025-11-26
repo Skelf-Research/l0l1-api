@@ -1,239 +1,446 @@
+"""Interactive Jupyter widgets for l0l1 SQL analysis."""
+
 import asyncio
-from typing import Optional
+from typing import Optional, List, Callable
 import ipywidgets as widgets
 from IPython.display import display, HTML
 
-from ...models.factory import ModelFactory
-from ...services.pii_detector import PIIDetector
-from ...services.learning_service import LearningService
+from .client import L0l1JupyterClient
 
 
 class SQLValidatorWidget:
     """Interactive widget for SQL validation in Jupyter notebooks."""
 
-    def __init__(self, workspace: str = "jupyter_widget"):
+    def __init__(
+        self,
+        workspace: str = "jupyter_widget",
+        api_url: str = "http://localhost:8000"
+    ):
         self.workspace = workspace
-        self.pii_detector = PIIDetector()
-        self.learning_service = LearningService()
-        self.create_widget()
+        self.client = L0l1JupyterClient(api_url=api_url)
+        self.schema_context: Optional[str] = None
+        self._create_widget()
 
-    def create_widget(self):
-        """Create the interactive widget."""
-        # SQL input
-        self.sql_textarea = widgets.Textarea(
-            value='',
+    def _run_async(self, coro):
+        """Run async coroutine."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            try:
+                import nest_asyncio
+                nest_asyncio.apply()
+                return asyncio.get_event_loop().run_until_complete(coro)
+            except ImportError:
+                return None
+        else:
+            return asyncio.run(coro)
+
+    def _create_widget(self):
+        """Create the interactive widget components."""
+        # Header
+        self.header = widgets.HTML(
+            value='<h3 style="margin:0;color:#667eea;">l0l1 SQL Validator</h3>'
+        )
+
+        # SQL input area
+        self.sql_input = widgets.Textarea(
             placeholder='Enter your SQL query here...',
-            description='SQL Query:',
-            layout=widgets.Layout(width='100%', height='150px')
+            layout=widgets.Layout(width='100%', height='150px'),
+            style={'description_width': '0px'}
         )
 
-        # Options
-        self.validate_checkbox = widgets.Checkbox(
-            value=True,
-            description='Validate Query',
-            indent=False
+        # Analysis options
+        self.validate_cb = widgets.Checkbox(value=True, description='Validate', indent=False)
+        self.explain_cb = widgets.Checkbox(value=False, description='Explain', indent=False)
+        self.pii_cb = widgets.Checkbox(value=True, description='Check PII', indent=False)
+        self.complete_cb = widgets.Checkbox(value=False, description='Suggestions', indent=False)
+
+        options_box = widgets.HBox(
+            [self.validate_cb, self.explain_cb, self.pii_cb, self.complete_cb],
+            layout=widgets.Layout(margin='10px 0')
         )
 
-        self.explain_checkbox = widgets.Checkbox(
-            value=False,
-            description='Explain Query',
-            indent=False
+        # Schema input (collapsible)
+        self.schema_input = widgets.Textarea(
+            placeholder='Optional: Paste your database schema here for context-aware validation...',
+            layout=widgets.Layout(width='100%', height='100px'),
+            style={'description_width': '0px'}
         )
 
-        self.pii_checkbox = widgets.Checkbox(
-            value=True,
-            description='Check PII',
-            indent=False
+        self.schema_accordion = widgets.Accordion(
+            children=[self.schema_input],
+            selected_index=None
         )
-
-        self.complete_checkbox = widgets.Checkbox(
-            value=False,
-            description='Get Suggestions',
-            indent=False
-        )
-
-        # Provider selection
-        self.provider_dropdown = widgets.Dropdown(
-            options=['openai', 'anthropic'],
-            value='openai',
-            description='AI Provider:'
-        )
-
-        # Schema input
-        self.schema_textarea = widgets.Textarea(
-            value='',
-            placeholder='Optional: Enter schema context...',
-            description='Schema:',
-            layout=widgets.Layout(width='100%', height='100px')
-        )
+        self.schema_accordion.set_title(0, 'Schema Context (Optional)')
 
         # Analyze button
-        self.analyze_button = widgets.Button(
-            description='🔍 Analyze SQL',
+        self.analyze_btn = widgets.Button(
+            description='Analyze SQL',
             button_style='primary',
-            layout=widgets.Layout(width='200px')
+            icon='search',
+            layout=widgets.Layout(width='150px')
+        )
+        self.analyze_btn.on_click(self._on_analyze)
+
+        # Clear button
+        self.clear_btn = widgets.Button(
+            description='Clear',
+            button_style='',
+            icon='trash',
+            layout=widgets.Layout(width='100px')
+        )
+        self.clear_btn.on_click(self._on_clear)
+
+        button_box = widgets.HBox(
+            [self.analyze_btn, self.clear_btn],
+            layout=widgets.Layout(margin='10px 0')
         )
 
-        # Results area
-        self.results_output = widgets.Output()
+        # Results output area
+        self.results_output = widgets.Output(
+            layout=widgets.Layout(border='1px solid #dee2e6', border_radius='5px', padding='10px')
+        )
 
-        # Layout
-        options_row = widgets.HBox([
-            self.validate_checkbox,
-            self.explain_checkbox,
-            self.pii_checkbox,
-            self.complete_checkbox
-        ])
-
-        config_row = widgets.HBox([self.provider_dropdown])
-
+        # Assemble the widget
         self.widget = widgets.VBox([
-            widgets.HTML("<h3>🚀 l0l1 SQL Validator</h3>"),
-            self.sql_textarea,
-            widgets.HTML("<h4>Options</h4>"),
-            options_row,
-            config_row,
-            widgets.HTML("<h4>Schema Context (Optional)</h4>"),
-            self.schema_textarea,
-            self.analyze_button,
+            self.header,
+            widgets.HTML('<label style="color:#6c757d;font-size:0.9em;">SQL Query</label>'),
+            self.sql_input,
+            widgets.HTML('<label style="color:#6c757d;font-size:0.9em;">Analysis Options</label>'),
+            options_box,
+            self.schema_accordion,
+            button_box,
             self.results_output
-        ])
+        ], layout=widgets.Layout(padding='15px'))
 
-        # Event handler
-        self.analyze_button.on_click(self._on_analyze_click)
-
-    def _on_analyze_click(self, button):
+    def _on_analyze(self, btn):
         """Handle analyze button click."""
         self.results_output.clear_output()
+        query = self.sql_input.value.strip()
 
+        if not query:
+            with self.results_output:
+                display(HTML('<div style="color:#dc3545;">Please enter a SQL query</div>'))
+            return
+
+        # Get schema context
+        schema = self.schema_input.value.strip() or None
+
+        # Run analysis
+        self._run_async(self._analyze(query, schema))
+
+    def _on_clear(self, btn):
+        """Handle clear button click."""
+        self.sql_input.value = ''
+        self.results_output.clear_output()
+
+    async def _analyze(self, query: str, schema: Optional[str]):
+        """Run the analysis."""
         with self.results_output:
-            query = self.sql_textarea.value.strip()
-            if not query:
-                display(HTML('<div style="color: red;">Please enter a SQL query</div>'))
-                return
+            sections = []
 
-            # Run async analysis
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                try:
-                    import nest_asyncio
-                    nest_asyncio.apply()
-                except ImportError:
-                    display(HTML('<div style="color: red;">Error: nest_asyncio is required</div>'))
-                    return
-
-            asyncio.run(self._analyze_query(query))
-
-    async def _analyze_query(self, query: str):
-        """Analyze the SQL query."""
-        schema_context = self.schema_textarea.value.strip() or None
-        model = ModelFactory.create_model(self.provider_dropdown.value)
-
-        results_html = """
-        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; margin-top: 10px;">
-            <h4 style="color: #007bff; margin-top: 0;">📊 Analysis Results</h4>
-        """
-
-        # Display query
-        results_html += f"""
-        <div style="margin: 15px 0;">
-            <strong>Query:</strong>
-            <div style="background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; font-family: 'Monaco', 'Consolas', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 5px;">
-{query}
+            # Query display
+            escaped = query.replace('<', '&lt;').replace('>', '&gt;')
+            sections.append(f'''
+            <div style="margin-bottom:15px;">
+                <pre style="background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:5px;margin:0;overflow-x:auto;">{escaped}</pre>
             </div>
-        </div>
-        """
+            ''')
 
-        # PII Check
-        if self.pii_checkbox.value:
-            pii_findings = self.pii_detector.detect_pii(query)
-            if pii_findings:
-                results_html += """
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0;">
-                    <h5 style="color: #856404; margin-top: 0;">⚠️ PII Detected</h5>
-                """
-                for finding in pii_findings:
-                    results_html += f"<div>• <strong>{finding['entity_type']}:</strong> <code>{finding['text']}</code> (confidence: {finding['confidence']:.2f})</div>"
-                results_html += "</div>"
-            else:
-                results_html += """
-                <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 15px 0;">
-                    <div style="color: #155724;">✅ No PII detected</div>
-                </div>
-                """
-
-        # Validation
-        if self.validate_checkbox.value:
-            try:
-                validation_result = await model.validate_sql_query(query, schema_context)
-                if validation_result.get("is_valid", False):
-                    results_html += """
-                    <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 15px 0;">
-                        <div style="color: #155724;">✅ Query is valid</div>
+            # PII Check
+            if self.pii_cb.value:
+                result = await self.client.check_pii(query)
+                if result.get('has_pii'):
+                    detections = result.get('detections', [])
+                    items = ''.join([
+                        f'<div>• <code>{d["entity_type"]}</code>: {d["value"]}</div>'
+                        for d in detections
+                    ])
+                    sections.append(f'''
+                    <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:10px;margin:10px 0;border-radius:0 5px 5px 0;">
+                        <strong style="color:#856404;">PII Detected</strong>
+                        {items}
                     </div>
-                    """
+                    ''')
                 else:
-                    results_html += f"""
-                    <div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 15px 0;">
-                        <h5 style="color: #721c24; margin-top: 0;">❌ Validation Issues ({validation_result.get('severity', 'medium')} severity)</h5>
-                    """
-                    for issue in validation_result.get("issues", []):
-                        results_html += f"<div>• {issue}</div>"
+                    sections.append('''
+                    <div style="background:#d4edda;border-left:4px solid #28a745;padding:10px;margin:10px 0;border-radius:0 5px 5px 0;">
+                        <span style="color:#155724;">No PII detected</span>
+                    </div>
+                    ''')
 
-                    if validation_result.get("suggestions"):
-                        results_html += "<br><strong>Suggestions:</strong>"
-                        for suggestion in validation_result["suggestions"]:
-                            results_html += f"<div>• {suggestion}</div>"
-                    results_html += "</div>"
-            except Exception as e:
-                results_html += f'<div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 15px 0;"><strong>Validation Error:</strong> {str(e)}</div>'
+            # Validation
+            if self.validate_cb.value:
+                result = await self.client.validate(query, self.workspace, schema)
+                if result.get('valid') and not result.get('errors') and not result.get('warnings'):
+                    sections.append('''
+                    <div style="background:#d4edda;border-left:4px solid #28a745;padding:10px;margin:10px 0;border-radius:0 5px 5px 0;">
+                        <span style="color:#155724;">Query is valid</span>
+                    </div>
+                    ''')
+                else:
+                    errors = ''.join([f'<div style="color:#721c24;">• {e}</div>' for e in result.get('errors', [])])
+                    warnings = ''.join([f'<div style="color:#856404;">• {w}</div>' for w in result.get('warnings', [])])
+                    bg = '#f8d7da' if result.get('errors') else '#fff3cd'
+                    border = '#dc3545' if result.get('errors') else '#ffc107'
+                    sections.append(f'''
+                    <div style="background:{bg};border-left:4px solid {border};padding:10px;margin:10px 0;border-radius:0 5px 5px 0;">
+                        {errors}{warnings}
+                    </div>
+                    ''')
 
-        # Explanation
-        if self.explain_checkbox.value:
-            try:
-                explanation = await model.explain_sql_query(query, schema_context)
-                results_html += f"""
-                <div style="background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 15px 0;">
-                    <h5 style="color: #0d47a1; margin-top: 0;">📝 Query Explanation</h5>
-                    <div>{explanation.replace(chr(10), '<br>')}</div>
+            # Explanation
+            if self.explain_cb.value:
+                result = await self.client.explain(query, self.workspace)
+                sections.append(f'''
+                <div style="background:#e3f2fd;border-left:4px solid #2196f3;padding:10px;margin:10px 0;border-radius:0 5px 5px 0;">
+                    <strong style="color:#1565c0;">Explanation</strong>
+                    <div style="margin-top:8px;">{result.get("explanation", "N/A")}</div>
+                    <div style="margin-top:8px;font-size:0.9em;color:#6c757d;">
+                        Complexity: {result.get("complexity", "unknown")} |
+                        Tables: {", ".join(result.get("tables", [])) or "N/A"}
+                    </div>
                 </div>
-                """
-            except Exception as e:
-                results_html += f'<div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 15px 0;"><strong>Explanation Error:</strong> {str(e)}</div>'
+                ''')
 
-        # Suggestions
-        if self.complete_checkbox.value:
-            try:
-                suggestions = await self.learning_service.get_query_suggestions(
-                    query, self.workspace, schema_context
-                )
-                if suggestions:
-                    results_html += """
-                    <div style="background: #e8f5e8; border-left: 4px solid #4caf50; padding: 15px; margin: 15px 0;">
-                        <h5 style="color: #2e7d32; margin-top: 0;">💡 Query Suggestions</h5>
-                    """
-                    for i, suggestion in enumerate(suggestions[:3], 1):  # Limit to top 3
-                        results_html += f"""
-                        <div style="margin: 10px 0;">
+            # Completions
+            if self.complete_cb.value:
+                result = await self.client.complete(query, self.workspace)
+                completions = result.get('completions', [])
+                if completions:
+                    items = ''
+                    for i, c in enumerate(completions[:3], 1):
+                        escaped_c = c.replace('<', '&lt;').replace('>', '&gt;')
+                        items += f'''
+                        <div style="margin:8px 0;">
                             <strong>Option {i}:</strong>
-                            <div style="background: #2d3748; color: #e2e8f0; padding: 10px; border-radius: 5px; font-family: 'Monaco', 'Consolas', monospace; white-space: pre-wrap; overflow-x: auto; margin-top: 5px; font-size: 0.9em;">
-{suggestion}
-                            </div>
+                            <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;margin:5px 0;font-size:0.9em;">{escaped_c}</pre>
                         </div>
-                        """
-                    results_html += "</div>"
-            except Exception as e:
-                results_html += f'<div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 15px 0;"><strong>Suggestions Error:</strong> {str(e)}</div>'
+                        '''
+                    sections.append(f'''
+                    <div style="background:#e8f5e9;border-left:4px solid #4caf50;padding:10px;margin:10px 0;border-radius:0 5px 5px 0;">
+                        <strong style="color:#2e7d32;">Suggestions</strong>
+                        {items}
+                    </div>
+                    ''')
 
-        results_html += "</div>"
-        display(HTML(results_html))
+            display(HTML(''.join(sections)))
 
     def display(self):
         """Display the widget."""
         display(self.widget)
 
 
-def create_sql_validator(workspace: str = "jupyter_widget") -> SQLValidatorWidget:
+class QueryHistoryWidget:
+    """Widget to display and manage query history."""
+
+    def __init__(
+        self,
+        workspace: str = "jupyter_widget",
+        api_url: str = "http://localhost:8000"
+    ):
+        self.workspace = workspace
+        self.client = L0l1JupyterClient(api_url=api_url)
+        self.on_select: Optional[Callable[[str], None]] = None
+        self._create_widget()
+
+    def _run_async(self, coro):
+        """Run async coroutine."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            try:
+                import nest_asyncio
+                nest_asyncio.apply()
+                return asyncio.get_event_loop().run_until_complete(coro)
+            except ImportError:
+                return None
+        else:
+            return asyncio.run(coro)
+
+    def _create_widget(self):
+        """Create the widget."""
+        self.header = widgets.HTML(
+            value='<h3 style="margin:0;color:#667eea;">Query History</h3>'
+        )
+
+        self.search_input = widgets.Text(
+            placeholder='Search similar queries...',
+            layout=widgets.Layout(width='100%')
+        )
+
+        self.search_btn = widgets.Button(
+            description='Search',
+            button_style='primary',
+            icon='search',
+            layout=widgets.Layout(width='100px')
+        )
+        self.search_btn.on_click(self._on_search)
+
+        self.results_output = widgets.Output()
+
+        self.widget = widgets.VBox([
+            self.header,
+            widgets.HBox([self.search_input, self.search_btn]),
+            self.results_output
+        ], layout=widgets.Layout(padding='15px'))
+
+    def _on_search(self, btn):
+        """Handle search."""
+        query = self.search_input.value.strip()
+        if query:
+            self._run_async(self._search(query))
+
+    async def _search(self, query: str):
+        """Search for similar queries."""
+        self.results_output.clear_output()
+        with self.results_output:
+            results = await self.client.get_similar_queries(query, self.workspace)
+
+            if not results:
+                display(HTML('<div style="color:#6c757d;">No similar queries found</div>'))
+                return
+
+            html = '<div style="margin-top:10px;">'
+            for i, r in enumerate(results, 1):
+                q = r.get('query', '').replace('<', '&lt;').replace('>', '&gt;')
+                sim = r.get('similarity', 0)
+                html += f'''
+                <div style="background:#f8f9fa;padding:10px;margin:5px 0;border-radius:5px;border:1px solid #dee2e6;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+                        <strong>Query {i}</strong>
+                        <span style="color:#6c757d;">Similarity: {sim:.0%}</span>
+                    </div>
+                    <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;margin:0;font-size:0.9em;">{q}</pre>
+                </div>
+                '''
+            html += '</div>'
+            display(HTML(html))
+
+    def display(self):
+        """Display the widget."""
+        display(self.widget)
+
+
+class SchemaExplorerWidget:
+    """Widget to explore database schema."""
+
+    def __init__(self, schema: str = ""):
+        self.schema = schema
+        self._create_widget()
+
+    def _create_widget(self):
+        """Create the widget."""
+        self.header = widgets.HTML(
+            value='<h3 style="margin:0;color:#667eea;">Schema Explorer</h3>'
+        )
+
+        self.schema_input = widgets.Textarea(
+            value=self.schema,
+            placeholder='Paste your schema SQL here...',
+            layout=widgets.Layout(width='100%', height='200px')
+        )
+
+        self.parse_btn = widgets.Button(
+            description='Parse Schema',
+            button_style='primary',
+            icon='table',
+            layout=widgets.Layout(width='150px')
+        )
+        self.parse_btn.on_click(self._on_parse)
+
+        self.results_output = widgets.Output()
+
+        self.widget = widgets.VBox([
+            self.header,
+            self.schema_input,
+            self.parse_btn,
+            self.results_output
+        ], layout=widgets.Layout(padding='15px'))
+
+    def _on_parse(self, btn):
+        """Parse and display schema."""
+        self.results_output.clear_output()
+        schema = self.schema_input.value.strip()
+
+        if not schema:
+            with self.results_output:
+                display(HTML('<div style="color:#dc3545;">Please enter a schema</div>'))
+            return
+
+        with self.results_output:
+            # Simple parsing - extract CREATE TABLE statements
+            tables = self._extract_tables(schema)
+
+            if not tables:
+                display(HTML('<div style="color:#6c757d;">No tables found in schema</div>'))
+                return
+
+            html = '<div style="margin-top:10px;">'
+            for table_name, columns in tables.items():
+                cols_html = ''.join([
+                    f'<div style="margin:3px 0;padding-left:15px;"><code>{col}</code></div>'
+                    for col in columns
+                ])
+                html += f'''
+                <div style="background:#e3f2fd;padding:10px;margin:5px 0;border-radius:5px;border:1px solid #90caf9;">
+                    <strong style="color:#1565c0;">{table_name}</strong>
+                    {cols_html}
+                </div>
+                '''
+            html += '</div>'
+            display(HTML(html))
+
+    def _extract_tables(self, schema: str) -> dict:
+        """Extract table definitions from schema."""
+        import re
+        tables = {}
+
+        # Simple regex to find CREATE TABLE statements
+        pattern = r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*?)\)'
+        matches = re.findall(pattern, schema, re.IGNORECASE | re.DOTALL)
+
+        for table_name, columns_str in matches:
+            # Extract column names (simplified)
+            columns = []
+            for line in columns_str.split(','):
+                line = line.strip()
+                if line and not line.upper().startswith(('PRIMARY', 'FOREIGN', 'UNIQUE', 'INDEX', 'CONSTRAINT')):
+                    parts = line.split()
+                    if parts:
+                        columns.append(parts[0])
+            tables[table_name] = columns
+
+        return tables
+
+    def display(self):
+        """Display the widget."""
+        display(self.widget)
+
+
+# Convenience functions
+def create_sql_validator(
+    workspace: str = "jupyter_widget",
+    api_url: str = "http://localhost:8000"
+) -> SQLValidatorWidget:
     """Create and return a SQL validator widget."""
-    widget = SQLValidatorWidget(workspace)
-    return widget
+    return SQLValidatorWidget(workspace=workspace, api_url=api_url)
+
+
+def create_query_history(
+    workspace: str = "jupyter_widget",
+    api_url: str = "http://localhost:8000"
+) -> QueryHistoryWidget:
+    """Create and return a query history widget."""
+    return QueryHistoryWidget(workspace=workspace, api_url=api_url)
+
+
+def create_schema_explorer(schema: str = "") -> SchemaExplorerWidget:
+    """Create and return a schema explorer widget."""
+    return SchemaExplorerWidget(schema=schema)

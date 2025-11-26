@@ -317,7 +317,7 @@ class DatabaseService:
 
         except ImportError as e:
             result["success"] = False
-            result["message"] = f"Database driver not installed: {str(e)}. Run: poetry install"
+            result["message"] = f"Database driver not installed: {str(e)}. Run: uv sync"
         except Exception as e:
             result["success"] = False
             result["message"] = f"Connection failed: {str(e)}"
